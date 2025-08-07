@@ -5,6 +5,8 @@ import BranchLogin from "./components/pages/BranchLogin.jsx";
 import BranchDashboard from "./components/pages/BranchDashboard.jsx";
 import AdminLogin from "./components/pages/admin/AdminLogin.jsx";
 import AdminDashboard from "./components/pages/admin/AdminDashboard.jsx";
+import AddFabric from "./components/pages/admin/Fabric/AddFabric.jsx";
+
 
 export default function RouterApp() {
   return (
@@ -16,6 +18,8 @@ export default function RouterApp() {
         <Route path="/branch/dashboard" element={<BranchDashboard />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/fabric/add" element={<AddFabric />} />
+
       </Routes>
     </BrowserRouter>
   );
