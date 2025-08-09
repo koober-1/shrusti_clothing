@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-// --- BADLAV 1: Outlet ko import karna hai ---
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate, Outlet, useLocation } from 'react-router-dom'; // <-- useLocation add kiya
 import { 
     FaSearch, FaBolt, FaUserCircle, FaTachometerAlt, FaIndustry, 
     FaTshirt, FaUsers, FaCut, FaMoneyBillWave, FaWallet, FaUserTie,
     FaChevronRight, FaChevronDown 
 } from 'react-icons/fa';
 
-// --- BADLAV 2: Routes.js se match karne ke liye paths ko theek karna ---
 const sidebarItems = [
   {
     label: 'Dashboard',
@@ -21,8 +19,8 @@ const sidebarItems = [
     label: 'Fabric Inward',
     icon: <FaIndustry />,
     children: [
-      { label: 'View Fabric Stock', path: '/admin/dashboard/fabric/add' },
-      { label: 'Add New', path: '/admin/dashboard/fabric/view' },
+      { label: 'View Fabric Stock', path: '/admin/dashboard/fabric/view' },
+      { label: 'Add New', path: '/admin/dashboard/fabric/add' },
     ]
   },
   {
@@ -40,7 +38,7 @@ const sidebarItems = [
     children: [
       { label: 'Add Staff', path: '/admin/dashboard/staff/add' },
       { label: 'Staff List', path: '/admin/dashboard/staff/list' },
-      { label: 'Attendance', path: '/admin/dashboard/staff/attendance' },
+      /* { label: 'Attendance', path: '/admin/dashboard/staff/attendance' }, */
     ]
   },
   {
@@ -78,25 +76,20 @@ const sidebarItems = [
   },
 ];
 
-
 const AdminDashboard = () => {
-  // --- BADLAV 3: activeMenu state ki ab zaroorat nahi hai ---
-  const [openSubmenu, setOpenSubmenu] = useState('Fabric Inward'); // Default khula rakh sakte hain
+  const [openSubmenu, setOpenSubmenu] = useState('Fabric Inward');
   const navigate = useNavigate();
+  const location = useLocation(); // <-- current route path milta hai
 
-  // Menu item (parent) par click karne se sirf submenu khulega/band hoga
   const handleMenuClick = (item) => {
     if (item.children) {
       setOpenSubmenu(openSubmenu === item.label ? '' : item.label);
     }
   };
-  
-  // Submenu item (child) par click karne se sirf navigation hoga
+
   const handleSubMenuClick = (childItem) => {
     navigate(childItem.path);
   };
-
-  // --- BADLAV 4: renderSectionContent function ki ab zaroorat nahi ---
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -109,33 +102,44 @@ const AdminDashboard = () => {
             <span className="text-xl font-normal tracking-wide block -mt-1">clothing</span>
           </h1>
         </div>
+
         {/* Sidebar Navigation */}
         <nav className="flex-1 py-4 px-2">
-          {sidebarItems.map((item, index) => (
-            <React.Fragment key={index}>
-              <SidebarItem
-                icon={item.icon}
-                label={item.label}
-                onClick={() => handleMenuClick(item)}
-                isSelected={openSubmenu === item.label}
-                isSubmenuOpen={openSubmenu === item.label}
-                hasSubmenu={!!item.children}
-              />
-              {item.children && openSubmenu === item.label && (
-                <div className="pl-8 text-sm flex flex-col space-y-1 my-1">
-                  {item.children.map((child, childIndex) => (
-                    <button
-                      key={childIndex}
-                      onClick={() => handleSubMenuClick(child)}
-                      className="text-gray-400 hover:text-white text-left p-2 rounded hover:bg-gray-800 transition-colors duration-200"
-                    >
-                      {child.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </React.Fragment>
-          ))}
+          {sidebarItems.map((item, index) => {
+            // Agar koi child ka path current location se match kare to parent active
+            const isParentActive = item.children?.some(child => location.pathname === child.path);
+            return (
+              <React.Fragment key={index}>
+                <SidebarItem
+                  icon={item.icon}
+                  label={item.label}
+                  onClick={() => handleMenuClick(item)}
+                  isSelected={isParentActive || openSubmenu === item.label}
+                  isSubmenuOpen={openSubmenu === item.label}
+                  hasSubmenu={!!item.children}
+                />
+                {item.children && openSubmenu === item.label && (
+                  <div className="pl-8 text-sm flex flex-col space-y-1 my-1">
+                    {item.children.map((child, childIndex) => {
+                      const isChildActive = location.pathname === child.path;
+                      return (
+                        <button
+                          key={childIndex}
+                          onClick={() => handleSubMenuClick(child)}
+                          className={`text-left p-2 rounded transition-colors duration-200 
+                            ${isChildActive 
+                              ? 'bg-[#0071bc] text-white' 
+                              : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+                        >
+                          {child.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
         </nav>
       </aside>
 
@@ -154,7 +158,7 @@ const AdminDashboard = () => {
           <FaUserCircle size={40} className='text-white ml-4' />
         </header>
 
-        {/* --- BADLAV 5 (Sabse Zaroori): Yahan Outlet Aayega --- */}
+        {/* Page Content */}
         <main className="flex-1 p-6">
           <Outlet />
         </main>
@@ -163,7 +167,6 @@ const AdminDashboard = () => {
   );
 };
 
-// SidebarItem component mein koi badlav nahi
 const SidebarItem = ({ icon, label, onClick, isSelected, hasSubmenu, isSubmenuOpen }) => (
   <div
     className={`flex items-center justify-between space-x-2 p-2 rounded cursor-pointer transition-colors duration-200 
@@ -171,7 +174,7 @@ const SidebarItem = ({ icon, label, onClick, isSelected, hasSubmenu, isSubmenuOp
     onClick={onClick}
   >
     <div className="flex items-center space-x-2">
-      <span className={`${isSelected ? 'text-white' : 'text-gray-400'}`}>{icon}</span>
+      <span>{icon}</span>
       <span className="font-semibold">{label}</span>
     </div>
     {hasSubmenu && (
