@@ -7,7 +7,7 @@ const getTodayDateDDMMYY = () => {
   const day = String(today.getDate()).padStart(2, '0');
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const year = String(today.getFullYear()).slice(-2);
-  return `${day}-${month}-${year}`;
+  return `${day}/${month}/${year}`; // Updated to use / as separator
 };
 
 // 10-अंकों का यूनिक नंबर जनरेट करने के लिए फंक्शन
@@ -32,6 +32,7 @@ export default function App() {
   });
   const [barcodeData, setBarcodeData] = useState(null);
   const [weightError, setWeightError] = useState('');
+  const [dateError, setDateError] = useState('');
 
   // माउंट होने पर यूनिक नंबर ऑटो-जनरेट करें
   useEffect(() => {
@@ -43,7 +44,24 @@ export default function App() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+
+    // तारीख (date) फ़ील्ड के लिए विशेष हैंडलिंग
+    if (name === 'date') {
+      const sanitizedValue = value.replace(/[^0-9]/g, ''); // सिर्फ़ नंबर रखें
+      let formattedValue = '';
+      if (sanitizedValue.length > 0) {
+        formattedValue += sanitizedValue.substring(0, 2);
+      }
+      if (sanitizedValue.length > 2) {
+        formattedValue += '/' + sanitizedValue.substring(2, 4);
+      }
+      if (sanitizedValue.length > 4) {
+        formattedValue += '/' + sanitizedValue.substring(4, 6);
+      }
+      setFormData(prev => ({ ...prev, [name]: formattedValue }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = (e) => {
@@ -53,13 +71,22 @@ export default function App() {
       return;
     }
 
-    // Moved validation logic to submission time
-    const weightRegex = /^\d+\.\d{2}$/;
+    // वजन के लिए अपडेटेड वैलिडेशन: दशमलव के साथ या बिना दशमलव के नंबर स्वीकार करें
+    const weightRegex = /^\d+(\.\d+)?$/;
     if (!weightRegex.test(formData.weightOfMaterial)) {
-      setWeightError('Please Input Valid Weight (eg:5.25, 35.68)');
+      setWeightError('Please enter a valid weight (e.g., 5, 5.25)');
       return;
     } else {
       setWeightError('');
+    }
+
+    // तारीख के लिए वैलिडेशन
+    const dateRegex = /^\d{2}\/\d{2}\/\d{2}$/;
+    if (!dateRegex.test(formData.date)) {
+        setDateError('Please enter a valid date in DD/MM/YY format.');
+        return;
+    } else {
+        setDateError('');
     }
 
     setBarcodeData({
@@ -87,6 +114,7 @@ export default function App() {
       fabricType: '',
     });
     setWeightError('');
+    setDateError('');
   };
 
   // पूरे रसीद सेक्शन को प्रिंट करने के लिए नया फंक्शन
@@ -127,7 +155,7 @@ export default function App() {
     ctx.font = 'bold 14px Inter, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(barcodeData.display.date, padding, 60);
-    
+
     ctx.textAlign = 'right';
     const year = barcodeData.display.date.slice(-2);
     const formattedId = `${barcodeData.display.supplierShortName}-${barcodeData.display.invoiceNo}-${year}`;
@@ -139,7 +167,7 @@ export default function App() {
     ctx.fillText(`Invoice No.: ${barcodeData.display.invoiceNo}`, padding, 110);
     ctx.fillText(`Fabric type: ${barcodeData.display.fabricType}`, width / 2 + padding, 90);
     ctx.fillText(`Weight: ${barcodeData.display.weightOfMaterial} kg`, width / 2 + padding, 110);
-    
+
     // SVG बारकोड को इमेज में बदलें और Canvas पर ड्रॉ करें
     const barcodeSvgElement = barcodeRef.current.querySelector('svg');
     if (barcodeSvgElement) {
@@ -147,10 +175,10 @@ export default function App() {
         const img = new Image();
         const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
         const svgUrl = URL.createObjectURL(svgBlob);
-        
+
         img.onload = () => {
           ctx.drawImage(img, width/2 - img.width/2, 120); // बारकोड को केंद्र में ड्रॉ करें
-          
+
           ctx.font = '20px monospace';
           ctx.textAlign = 'center';
           ctx.fillText(barcodeData.value, width / 2, 220); // बारकोड नंबर को बारकोड के नीचे ड्रॉ करें
@@ -197,21 +225,21 @@ export default function App() {
 
                 {
                   (() => {
-                    const year = barcodeData.display.date.slice(-2);
-                    const formattedId = `${barcodeData.display.supplierShortName}-${barcodeData.display.invoiceNo}-${year}`;
+                    const year = formData.date.slice(-2);
+                    const formattedId = `${formData.supplierShortName}-${formData.invoiceNo}-${year}`;
                     return (
                       <div className="text-gray-900 text-sm w-full">
                         {/* Date और formatted ID को एक ही लाइन में रखें */}
                         <div className="flex justify-between items-center mb-2">
-                          <p className="font-bold">{barcodeData.display.date}</p>
+                          <p className="font-bold">{formData.date}</p>
                           <p className="font-bold text-lg">{formattedId}</p>
                         </div>
                         {/* डेटा को कॉम्पैक्ट ग्रिड लेआउट में व्यवस्थित करें */}
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-4">
-                          <p><strong>Supplier:</strong> {barcodeData.display.supplierName}</p>
-                          <p><strong>Fabric type:</strong> {barcodeData.display.fabricType}</p>
-                          <p><strong>Invoice No.:</strong> {barcodeData.display.invoiceNo}</p>
-                          <p><strong>Weight:</strong> {barcodeData.display.weightOfMaterial} kg</p>
+                          <p><strong>Supplier:</strong> {formData.supplierName}</p>
+                          <p><strong>Fabric type:</strong> {formData.fabricType}</p>
+                          <p><strong>Invoice No.:</strong> {formData.invoiceNo}</p>
+                          <p><strong>Weight:</strong> {formData.weightOfMaterial} kg</p>
                         </div>
                       </div>
                     );
@@ -301,21 +329,23 @@ export default function App() {
                     name="date"
                     value={formData.date}
                     onChange={handleChange}
-                    placeholder="dd/mm/yyyy"
-                    className="w-full bg-white border border-[#004a79] p-2 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0071bc]"
+                    placeholder="dd/mm/yy"
+                    className={`w-full bg-white border p-2 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0071bc] ${dateError ? 'border-red-500' : 'border-[#004a79]'}`}
+                    maxLength="8" // DD/MM/YY = 8 chars
                     required
                   />
+                  {dateError && <p className="text-red-400 text-sm mt-1">{dateError}</p>}
                 </div>
 
                 {/* Weight of Material */}
                 <div className="space-y-1">
-                  <label className="block text-white font-semibold">Weight of material</label>
+                  <label className="block text-white font-semibold">Weight of material (kg)</label>
                   <input
                     type="text"
                     name="weightOfMaterial"
                     value={formData.weightOfMaterial}
                     onChange={handleChange}
-                    placeholder="Input Number (e.g., 5.45 for 5kg 450gm)"
+                    placeholder="Input Number (e.g., 5, 5.45)"
                     className={`w-full bg-white border p-2 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0071bc] ${weightError ? 'border-red-500' : 'border-[#004a79]'}`}
                     required
                   />
