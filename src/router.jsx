@@ -40,6 +40,7 @@ export default function RouterApp() {
           <Route index element={<AdminHome />} />
           <Route path="fabric/add" element={<AddFabric />} />
           <Route path="staff/add" element={<AddStaff />} />
+          <Route path="fabric/view" element={<div>View Fabric Component Here</div>} />
         </Route>
       </Routes>
     </BrowserRouter>
