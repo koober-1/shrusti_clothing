@@ -19,17 +19,17 @@ const sidebarItems = [
     label: 'Fabric Inward',
     icon: <FaIndustry />,
     children: [
-      { label: 'View Fabric Stock', path: '/admin/dashboard/fabric/view' },
+      { label: 'View Fabric Stock', path: '/admin/dashboard/fabric/view' }, 
       { label: 'Add New', path: '/admin/dashboard/fabric/add' },
     ]
   },
-  {
+ {
     label: 'Product Entry',
     icon: <FaTshirt />,
     children: [
-      { label: 'Add Product', path: '/admin/dashboard/products/add' },
-      { label: 'View Products', path: '/admin/dashboard/products/view' },
-      { label: 'Update Stock', path: '/admin/dashboard/products/stock' },
+      { label: 'View all operation', path: '/admin/dashboard/products/operations' },
+      { label: 'View all products', path: '/admin/dashboard/products/view-all' },
+      { label: 'Add new product', path: '/admin/dashboard/products/add-new' },
     ]
   },
   {
