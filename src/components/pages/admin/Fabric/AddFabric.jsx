@@ -1,32 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Barcode from 'react-barcode';
 
-// आज की तारीख DD-MM-YY फॉर्मेट में प्राप्त करने के लिए हेल्पर फंक्शन
-const getTodayDateDDMMYY = () => {
+// Helper function to get today's date in DD/MM/YYYY format
+const getTodayDateDDMMYYYY = () => {
   const today = new Date();
   const day = String(today.getDate()).padStart(2, '0');
   const month = String(today.getMonth() + 1).padStart(2, '0');
-  const year = String(today.getFullYear()).slice(-2);
-  return `${day}/${month}/${year}`; // Updated to use / as separator
+  const year = today.getFullYear();
+  return `${day}/${month}/${year}`;
 };
 
-// 10-अंकों का यूनिक नंबर जनरेट करने के लिए फंक्शन
+// Function to generate a 10-digit unique number
 const generateUniqueNumber = () => {
   return Math.floor(1000000000 + Math.random() * 9000000000).toString();
 };
 
-// मुख्य कंपोनेंट जो फॉर्म और बारकोड व्यू को डिस्प्ले करता है
+// Main component that displays the form and barcode view
 export default function App() {
-  // पूरे रसीद कंटेनर का संदर्भ (reference) प्राप्त करने के लिए useRef hook का उपयोग
+  // Use useRef hook to get a reference to the entire receipt container
   const receiptRef = useRef(null);
-  const barcodeRef = useRef(null); // बारकोड SVG का संदर्भ प्राप्त करने के लिए
+  const barcodeRef = useRef(null); // Reference to the barcode SVG
 
   const [formData, setFormData] = useState({
     uniqueNumber: '',
     supplierName: '',
     supplierShortName: '',
     invoiceNo: '',
-    date: getTodayDateDDMMYY(),
+    date: getTodayDateDDMMYYYY(),
     weightOfMaterial: '',
     fabricType: '',
   });
@@ -34,7 +34,7 @@ export default function App() {
   const [weightError, setWeightError] = useState('');
   const [dateError, setDateError] = useState('');
 
-  // माउंट होने पर यूनिक नंबर ऑटो-जनरेट करें
+  // Auto-generate unique number on mount
   useEffect(() => {
     setFormData(prev => ({
       ...prev,
@@ -45,9 +45,9 @@ export default function App() {
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    // तारीख (date) फ़ील्ड के लिए विशेष हैंडलिंग
+    // Special handling for the date field
     if (name === 'date') {
-      const sanitizedValue = value.replace(/[^0-9]/g, ''); // सिर्फ़ नंबर रखें
+      const sanitizedValue = value.replace(/[^0-9]/g, ''); // Keep only numbers
       let formattedValue = '';
       if (sanitizedValue.length > 0) {
         formattedValue += sanitizedValue.substring(0, 2);
@@ -56,7 +56,7 @@ export default function App() {
         formattedValue += '/' + sanitizedValue.substring(2, 4);
       }
       if (sanitizedValue.length > 4) {
-        formattedValue += '/' + sanitizedValue.substring(4, 6);
+        formattedValue += '/' + sanitizedValue.substring(4, 8);
       }
       setFormData(prev => ({ ...prev, [name]: formattedValue }));
     } else {
@@ -71,7 +71,7 @@ export default function App() {
       return;
     }
 
-    // वजन के लिए अपडेटेड वैलिडेशन: दशमलव के साथ या बिना दशमलव के नंबर स्वीकार करें
+    // Updated validation for weight: accept numbers with or without a decimal
     const weightRegex = /^\d+(\.\d+)?$/;
     if (!weightRegex.test(formData.weightOfMaterial)) {
       setWeightError('Please enter a valid weight (e.g., 5, 5.25)');
@@ -80,10 +80,10 @@ export default function App() {
       setWeightError('');
     }
 
-    // तारीख के लिए वैलिडेशन
-    const dateRegex = /^\d{2}\/\d{2}\/\d{2}$/;
+    // Validation for date: now expecting DD/MM/YYYY
+    const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
     if (!dateRegex.test(formData.date)) {
-        setDateError('Please enter a valid date in DD/MM/YY format.');
+        setDateError('Please enter a valid date in DD/MM/YYYY format.');
         return;
     } else {
         setDateError('');
@@ -109,7 +109,7 @@ export default function App() {
       supplierName: '',
       supplierShortName: '',
       invoiceNo: '',
-      date: getTodayDateDDMMYY(),
+      date: getTodayDateDDMMYYYY(),
       weightOfMaterial: '',
       fabricType: '',
     });
@@ -117,7 +117,7 @@ export default function App() {
     setDateError('');
   };
 
-  // पूरे रसीद सेक्शन को प्रिंट करने के लिए नया फंक्शन
+  // Function to print the entire receipt section
   const handlePrint = () => {
     const printContent = receiptRef.current;
     if (printContent) {
@@ -130,23 +130,23 @@ export default function App() {
     }
   };
 
-  // पूरे रसीद सेक्शन को PNG इमेज के रूप में डाउनलोड करने के लिए अपडेट किया गया फंक्शन
+  // Function to download the entire receipt section as a PNG image
   const handleDownload = () => {
     if (!barcodeData) return;
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const padding = 20;
-    const width = 400; // आपके डिज़ाइन के अनुसार चौड़ाई
-    const height = 250; // आपके डिज़ाइन के अनुसार ऊँचाई
+    const width = 400; // Width based on your design
+    const height = 250; // Height based on your design
     canvas.width = width;
     canvas.height = height;
 
-    // सफेद बैकग्राउंड ड्रॉ करें
+    // Draw white background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // टेक्स्ट ड्रॉ करें
+    // Draw text
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 18px Inter, sans-serif';
     ctx.textAlign = 'center';
@@ -157,7 +157,7 @@ export default function App() {
     ctx.fillText(barcodeData.display.date, padding, 60);
 
     ctx.textAlign = 'right';
-    const year = barcodeData.display.date.slice(-2);
+    const year = barcodeData.display.date.slice(-4); // Get the full 4-digit year
     const formattedId = `${barcodeData.display.supplierShortName}-${barcodeData.display.invoiceNo}-${year}`;
     ctx.fillText(formattedId, width - padding, 60);
 
@@ -168,7 +168,7 @@ export default function App() {
     ctx.fillText(`Fabric type: ${barcodeData.display.fabricType}`, width / 2 + padding, 90);
     ctx.fillText(`Weight: ${barcodeData.display.weightOfMaterial} kg`, width / 2 + padding, 110);
 
-    // SVG बारकोड को इमेज में बदलें और Canvas पर ड्रॉ करें
+    // Convert SVG barcode to an image and draw on the canvas
     const barcodeSvgElement = barcodeRef.current.querySelector('svg');
     if (barcodeSvgElement) {
         const svgString = new XMLSerializer().serializeToString(barcodeSvgElement);
@@ -177,13 +177,13 @@ export default function App() {
         const svgUrl = URL.createObjectURL(svgBlob);
 
         img.onload = () => {
-          ctx.drawImage(img, width/2 - img.width/2, 120); // बारकोड को केंद्र में ड्रॉ करें
+          ctx.drawImage(img, width/2 - img.width/2, 120); // Draw barcode in the center
 
           ctx.font = '20px monospace';
           ctx.textAlign = 'center';
-          ctx.fillText(barcodeData.value, width / 2, 220); // बारकोड नंबर को बारकोड के नीचे ड्रॉ करें
+          ctx.fillText(barcodeData.value, width / 2, 220); // Draw barcode number below the barcode
 
-          // डाउनलोड के लिए Canvas को PNG में बदलें
+          // Convert canvas to PNG for download
           const link = document.createElement('a');
           link.download = `receipt_${formData.uniqueNumber}.png`;
           link.href = canvas.toDataURL('image/png');
@@ -218,23 +218,23 @@ export default function App() {
               </button>
             </div>
 
-            {/* Download और Print के लिए पूरे रसीद कंटेनर का संदर्भ (reference) लें */}
+            {/* Reference the entire receipt container for Download and Print */}
             <div className="max-w-md w-full bg-[#0071bc] shadow-lg rounded-3xl p-6">
               <h2 className="text-xl text-center text-white font-bold mb-4">Receipt</h2>
               <div ref={receiptRef} className="bg-white rounded-3xl p-6 flex flex-col justify-between items-center h-full">
 
                 {
                   (() => {
-                    const year = formData.date.slice(-2);
+                    const year = formData.date.slice(-4); // Get the full 4-digit year
                     const formattedId = `${formData.supplierShortName}-${formData.invoiceNo}-${year}`;
                     return (
                       <div className="text-gray-900 text-sm w-full">
-                        {/* Date और formatted ID को एक ही लाइन में रखें */}
+                        {/* Place Date and formatted ID on the same line */}
                         <div className="flex justify-between items-center mb-2">
                           <p className="font-bold">{formData.date}</p>
                           <p className="font-bold text-lg">{formattedId}</p>
                         </div>
-                        {/* डेटा को कॉम्पैक्ट ग्रिड लेआउट में व्यवस्थित करें */}
+                        {/* Arrange data in a compact grid layout */}
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-4">
                           <p><strong>Supplier:</strong> {formData.supplierName}</p>
                           <p><strong>Fabric type:</strong> {formData.fabricType}</p>
@@ -246,7 +246,7 @@ export default function App() {
                   })()
                 }
 
-                {/* बारकोड और नंबर के बीच की दूरी कम करें */}
+                {/* Reduce the space between the barcode and the number */}
                 <div ref={barcodeRef} className="flex flex-col items-center mt-6">
                   <div className="p-2">
                     <Barcode value={barcodeData.value} height={60} width={2} displayValue={false} />
@@ -329,9 +329,9 @@ export default function App() {
                     name="date"
                     value={formData.date}
                     onChange={handleChange}
-                    placeholder="dd/mm/yy"
+                    placeholder="dd/mm/yyyy"
                     className={`w-full bg-white border p-2 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0071bc] ${dateError ? 'border-red-500' : 'border-[#004a79]'}`}
-                    maxLength="8" // DD/MM/YY = 8 chars
+                    maxLength="10" // DD/MM/YYYY = 10 chars
                     required
                   />
                   {dateError && <p className="text-red-400 text-sm mt-1">{dateError}</p>}
