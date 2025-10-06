@@ -88,12 +88,12 @@ router.get("/by-operation", auth, async (req, res) => {
             WHERE branch_id = ? AND operation_name = ?
         `;
         let params = [operation, operation, operation, branch_id, operation];
-        
-        if (date) { 
-            sql += " AND DATE(created_at) = ?"; 
-            params.push(date); 
+
+        if (date) {
+            sql += " AND DATE(created_at) = ?";
+            params.push(date);
         }
-        
+
         sql += " ORDER BY created_at DESC";
 
         const [rows] = await db.query(sql, params);
@@ -107,7 +107,7 @@ router.get("/by-operation", auth, async (req, res) => {
 // ================== Get Unpaid Jobs by Operation ==================
 router.get("/unpaid-jobs", auth, async (req, res) => {
     const { branch_id, operation, operator_name } = req.query;
-    
+
     if (!branch_id || !operation || !operator_name) {
         return res.status(400).json({ success: false, error: "Missing required parameters." });
     }
@@ -116,7 +116,7 @@ router.get("/unpaid-jobs", auth, async (req, res) => {
         let sql = "";
         let params = [branch_id, operator_name];
 
-        switch(operation) {
+        switch (operation) {
             case 'singer':
                 sql = `SELECT * FROM wages WHERE branch_id = ? AND staff_name = ? AND (singer_paid = FALSE OR singer_paid IS NULL) ORDER BY created_at DESC`;
                 break;
@@ -140,98 +140,176 @@ router.get("/unpaid-jobs", auth, async (req, res) => {
 });
 
 // ================== 🔥 FIXED: Handle Advance Payment Update (Same as Cutting) ==================
-async function handleAdvancePayment(connection, staffId, staffName, amountToAdjust, branchId, operationType) {
+// async function handleAdvancePayment(connection, staffId, staffName, amountToAdjust, branchId, operationType) {
+//     if (!amountToAdjust || amountToAdjust === 0) {
+//         return { success: true, message: "No advance adjustment", adjustment_type: 'none' };
+//     }
+
+//     try {
+//         console.log(`🔥 ${operationType.toUpperCase()} - Advance Adjustment:`, {
+//             staffId, staffName, amountToAdjust, type: amountToAdjust > 0 ? 'DEDUCTION' : 'BONUS'
+//         });
+
+//         if (amountToAdjust > 0) {
+//             // ✅ POSITIVE: DEDUCT FROM EXISTING ADVANCE
+//             const [pendingAdvances] = await connection.query(
+//                 `SELECT id, CAST(amount AS DECIMAL(10,2)) as amount FROM advance_payments 
+//                  WHERE staff_id = ? AND branch_id = ? AND (is_paid = 0 OR is_paid IS NULL) 
+//                  ORDER BY created_at ASC`,
+//                 [staffId, branchId]
+//             );
+
+// console.log('🟡 Pending advances found:', pendingAdvances.length, pendingAdvances);
+//             let remainingDeduction = amountToAdjust;
+
+//             for (const advance of pendingAdvances) {
+//                 if (remainingDeduction <= 0) break;
+
+//                 const advanceAmount = parseFloat(advance.amount);
+//                 const deductAmount = Math.min(remainingDeduction, advanceAmount);
+
+//                 if (deductAmount >= advanceAmount) {
+//                     await connection.query(
+//                         `UPDATE advance_payments SET is_paid = 1, paid_at = NOW(), updated_at = NOW() WHERE id = ?`,
+//                         [advance.id]
+//                     );
+//                 } else {
+//                     await connection.query(
+//                         `UPDATE advance_payments SET amount = amount - ?, updated_at = NOW() WHERE id = ?`,
+//                         [deductAmount, advance.id]
+//                     );
+//                 }
+//                 remainingDeduction -= deductAmount;
+//             }
+
+//             return {
+//                 success: true,
+//                 message: `Advance deducted: ₹${amountToAdjust.toFixed(2)}`,
+//                 amount_deducted: amountToAdjust,
+//                 adjustment_type: 'deduction'
+//             };
+
+//         } else if (amountToAdjust < 0) {
+//             // ✅ NEGATIVE: ADD BONUS / EXTRA PAYMENT
+//             const bonusAmount = Math.abs(amountToAdjust);
+//             await connection.query(
+//                 `INSERT INTO advance_payments 
+//                  (branch_id, staff_id, staff_name, aadhar_number, pan_number, mobile_number, 
+//                   amount, payment_method, payment_date, is_paid, created_at) 
+//                  VALUES (?, ?, ?, 'N/A', 'N/A', 'N/A', ?, 'Wage Bonus', NOW(), 0, NOW())`,
+//                 [branchId, staffId, staffName, bonusAmount]
+//             );
+
+//             return {
+//                 success: true,
+//                 message: `Bonus added: ₹${bonusAmount.toFixed(2)}`,
+//                 bonus_added: bonusAmount,
+//                 adjustment_type: 'bonus'
+//             };
+//         }
+//     } catch (error) {
+//         console.error("❌ Advance adjustment error:", error);
+//         throw error;
+//     }
+// }
+
+// ================== 🔥 HANDLE ADVANCE PAYMENT ==================
+async function handleAdvancePayment(connection, staffId, staffName, amountToAdjust, branchId, operationType, relatedEntryIds = []) {
     if (!amountToAdjust || amountToAdjust === 0) {
-        console.log("ℹ️ No advance adjustment needed");
         return { success: true, message: "No advance adjustment", adjustment_type: 'none' };
     }
 
     try {
-        console.log(`🔥 ${operationType.toUpperCase()} - Advance Adjustment:`, {
-            staffId,
-            staffName,
-            amountToAdjust,
-            type: amountToAdjust > 0 ? 'DEDUCTION' : 'BONUS'
-        });
+        const type = amountToAdjust > 0 ? 'DEDUCTION' : 'BONUS';
+        console.log(`🔥 ${operationType.toUpperCase()} - Advance Adjustment:`, { staffId, staffName, amountToAdjust, type });
 
         if (amountToAdjust > 0) {
-            // ✅ POSITIVE: DEDUCT FROM ADVANCE (Same logic as cutting)
+            // ✅ DEDUCT FROM EXISTING ADVANCES
             const [pendingAdvances] = await connection.query(
-                `SELECT id, amount FROM advance_payments 
-                 WHERE staff_id = ? AND branch_id = ? AND (is_paid = 0 OR is_paid IS NULL) 
+                `SELECT id, CAST(amount AS DECIMAL(10,2)) as amount
+                 FROM advance_payments
+                 WHERE staff_id = ? AND branch_id = ? AND (is_paid = 0 OR is_paid IS NULL)
                  ORDER BY created_at ASC`,
                 [staffId, branchId]
             );
 
-            if (pendingAdvances.length === 0) {
-                console.warn("⚠️ No pending advance found!");
-                return { 
-                    success: false, 
-                    message: "No pending advance to deduct from",
-                    adjustment_type: 'error'
-                };
+            console.log('🟡 Pending advances found:', pendingAdvances.length, pendingAdvances);
+
+            if (!pendingAdvances.length) {
+                return { success: false, message: "No pending advances to deduct", adjustment_type: 'none' };
             }
 
-            let remainingDeduction = amountToAdjust;
+            let remainingDeduction = parseFloat(amountToAdjust.toFixed(2));
+            let totalDeducted = 0;
 
             for (const advance of pendingAdvances) {
                 if (remainingDeduction <= 0) break;
 
                 const advanceAmount = parseFloat(advance.amount);
                 const deductAmount = Math.min(remainingDeduction, advanceAmount);
-                const newAmount = advanceAmount - deductAmount;
 
-                console.log(`📝 Processing Advance ID ${advance.id}:`, {
-                    original: advanceAmount,
-                    deducting: deductAmount,
-                    newAmount: newAmount,
-                    willBeFullyPaid: newAmount <= 0.01
-                });
-
-                if (newAmount <= 0.01) {
-                    // Mark as fully paid
-                    const [updateResult] = await connection.query(
+                // 1️⃣ Update original advance
+                if (deductAmount >= advanceAmount) {
+                    // Fully paid
+                    await connection.query(
                         `UPDATE advance_payments 
                          SET is_paid = 1, paid_at = NOW(), updated_at = NOW() 
                          WHERE id = ?`,
                         [advance.id]
                     );
-                    console.log(`✅ Advance ID ${advance.id} marked as PAID. Rows affected: ${updateResult.affectedRows}`);
                 } else {
                     // Partial deduction
-                    const [updateResult] = await connection.query(
+                    await connection.query(
                         `UPDATE advance_payments 
-                         SET amount = ?, updated_at = NOW() 
+                         SET amount = CAST(amount AS DECIMAL(10,2)) - ?, updated_at = NOW() 
                          WHERE id = ?`,
-                        [newAmount, advance.id]
+                        [deductAmount, advance.id]
                     );
-                    console.log(`✅ Advance ID ${advance.id} updated to ₹${newAmount}. Rows affected: ${updateResult.affectedRows}`);
                 }
 
+                totalDeducted += deductAmount;
                 remainingDeduction -= deductAmount;
             }
 
-            console.log("✅ Advance Deducted:", amountToAdjust);
+            // 2️⃣ Insert record into cutting_receipts
+            await connection.query(
+                `INSERT INTO cutting_receipts
+                 (branch_id, operator_name, operator_id, operation, total_pieces, total_weight, gross_amount, deducted_advance, paid_amount, payment_type, paid_date, entry_ids, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW())`,
+                [
+                    branchId,
+                    staffName,
+                    staffId,
+                    operationType,          // 'cutting', 'singer', 'flatlock', etc
+                    0,                     // total_pieces (you can pass as parameter if needed)
+                    0,                     // total_weight (pass as parameter if needed)
+                    0,                     // gross_amount (pass if needed)
+                    totalDeducted,
+                    0,                     // paid_amount
+                    'Cash',
+                    JSON.stringify(relatedEntryIds)
+                ]
+            );
+
             return {
                 success: true,
-                message: `Advance deducted: ₹${amountToAdjust.toFixed(2)}`,
-                amount_deducted: amountToAdjust,
+                message: `Advance deducted: ₹${totalDeducted.toFixed(2)}`,
+                amount_deducted: totalDeducted,
                 adjustment_type: 'deduction'
             };
 
         } else if (amountToAdjust < 0) {
-            // ✅ NEGATIVE: ADD BONUS (Same logic as cutting)
+            // ✅ ADD BONUS / EXTRA PAYMENT
             const bonusAmount = Math.abs(amountToAdjust);
-            
+
             await connection.query(
                 `INSERT INTO advance_payments 
                  (branch_id, staff_id, staff_name, aadhar_number, pan_number, mobile_number, 
-                 amount, payment_method, payment_date, is_paid, created_at) 
-                 VALUES (?, ?, ?, 'N/A', 'N/A', 'N/A', ?, ?, NOW(), 0, NOW())`,
-                [branchId, staffId, staffName, bonusAmount, `${operationType.toUpperCase()} Wage Bonus`]
+                  amount, payment_method, payment_date, is_paid, created_at, type) 
+                 VALUES (?, ?, ?, 'N/A', 'N/A', 'N/A', ?, 'Wage Bonus', NOW(), 0, NOW(), 'advance')`,
+                [branchId, staffId, staffName, bonusAmount]
             );
 
-            console.log("✅ Bonus Added:", bonusAmount);
             return {
                 success: true,
                 message: `Bonus added: ₹${bonusAmount.toFixed(2)}`,
@@ -246,11 +324,13 @@ async function handleAdvancePayment(connection, staffId, staffName, amountToAdju
     }
 }
 
-// ================== 🔥 FIXED: Submit Singer Payment ==================
+// ================== 🔥 SUBMIT SINGER PAYMENT ==================
 router.post("/submit-singer-payment", auth, async (req, res) => {
+    const branchId = req.user.branch_id;
+
     const {
         staff_name, staff_id, gross_amount, deduction, payable_amount,
-        payment_type, branch_id, job_ids, jobs_count, total_pieces,
+        payment_type, job_ids, jobs_count, total_pieces,
         advance_amount_paid
     } = req.body;
 
@@ -268,14 +348,10 @@ router.post("/submit-singer-payment", auth, async (req, res) => {
         if (!finalStaffId) {
             const [staffRows] = await connection.query(
                 `SELECT id FROM staff WHERE full_name = ? AND branch_id = ? LIMIT 1`,
-                [staff_name, branch_id]
+                [staff_name, branchId]
             );
-            if (staffRows.length > 0) {
-                finalStaffId = staffRows[0].id;
-                console.log(`✅ Staff ID fetched: ${finalStaffId} for ${staff_name}`);
-            } else {
-                console.warn(`⚠️ Staff not found: ${staff_name}`);
-            }
+            if (staffRows.length > 0) finalStaffId = staffRows[0].id;
+            else console.warn(`⚠️ Staff not found: ${staff_name}`);
         }
 
         const safeGrossAmount = parseFloat(gross_amount) || 0;
@@ -283,12 +359,7 @@ router.post("/submit-singer-payment", auth, async (req, res) => {
         const safePayableAmount = parseFloat(payable_amount) || 0;
         const safeAdvanceAmountPaid = parseFloat(advance_amount_paid) || 0;
 
-        console.log("🔥 SINGER PAYMENT:", { 
-            staff_name, 
-            safeGrossAmount, 
-            safePayableAmount, 
-            advance_adjustment: safeAdvanceAmountPaid 
-        });
+        console.log("🔥 SINGER PAYMENT:", { staff_name, safeGrossAmount, safePayableAmount, advance_adjustment: safeAdvanceAmountPaid });
 
         // Insert payment record
         const insertPaymentSql = `
@@ -298,16 +369,17 @@ router.post("/submit-singer-payment", auth, async (req, res) => {
                 jobs_count, total_pieces, advance_deducted
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
-        
+
         const [paymentResult] = await connection.query(insertPaymentSql, [
-            staff_name, staff_id || null, 'singer', safeGrossAmount, safeDeduction,
-            safePayableAmount, payment_type || 'cash', branch_id, parseInt(jobs_count) || job_ids.length,
+            staff_name, finalStaffId || null, 'singer', safeGrossAmount, safeDeduction,
+            safePayableAmount, payment_type || 'cash', branchId, parseInt(jobs_count) || job_ids.length,
             parseInt(total_pieces) || 0, safeAdvanceAmountPaid
         ]);
+        console.log('paymentResult: ', paymentResult);
         const paymentId = paymentResult.insertId;
 
         // Update wages table
-        if (job_ids && job_ids.length > 0) {
+        if (job_ids.length > 0) {
             const jobUpdateSql = `
                 UPDATE wages
                 SET singer_paid = TRUE,
@@ -318,39 +390,28 @@ router.post("/submit-singer-payment", auth, async (req, res) => {
             await connection.query(jobUpdateSql, [paymentId, ...job_ids, staff_name]);
         }
 
-        // 🔥 Handle Advance Payment (Same as Cutting)
+        // 🔥 Handle Advance Payment
         let advanceResult = { success: true, adjustment_type: 'none' };
         if (safeAdvanceAmountPaid !== 0 && finalStaffId) {
-            console.log("🔥 Calling handleAdvancePayment with:", {
-                staffId: finalStaffId,
-                staffName: staff_name,
-                amount: safeAdvanceAmountPaid,
-                branchId: branch_id
-            });
-            
             advanceResult = await handleAdvancePayment(
-                connection, 
-                finalStaffId, 
+                connection,
+                finalStaffId,
                 staff_name,
-                safeAdvanceAmountPaid, 
-                branch_id,
+                safeAdvanceAmountPaid,
+                branchId,
                 'singer'
             );
-            
-            console.log("📊 Advance Result:", advanceResult);
-        } else {
-            console.log("⚠️ Skipping advance adjustment:", {
-                hasAmount: safeAdvanceAmountPaid !== 0,
-                hasStaffId: !!finalStaffId
-            });
         }
 
         await connection.commit();
 
-        res.status(200).json({ 
-            success: true, 
-            message: "Singer payment submitted successfully", 
-            paymentId: paymentId,
+        console.log('branchId: ', branchId);
+        console.log('advanceResult: ', advanceResult);
+
+        res.status(200).json({
+            success: true,
+            message: "Singer payment submitted successfully",
+            paymentId,
             advanceDeducted: advanceResult.adjustment_type === 'deduction' ? safeAdvanceAmountPaid : 0,
             bonusAdded: advanceResult.adjustment_type === 'bonus' ? Math.abs(safeAdvanceAmountPaid) : 0
         });
@@ -358,8 +419,8 @@ router.post("/submit-singer-payment", auth, async (req, res) => {
     } catch (err) {
         if (connection) await connection.rollback();
         console.error("❌ SINGER PAYMENT ERROR:", err);
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             error: err.message || "Failed to submit singer payment"
         });
     } finally {
@@ -367,14 +428,15 @@ router.post("/submit-singer-payment", auth, async (req, res) => {
     }
 });
 
+
 // ================== 🔥 SECURED: Submit Flatlock Payment ==================
 router.post("/submit-flatlock-payment", auth, async (req, res) => {
     // ⚠️ SECURED: Get branch_id from the authenticated user (req.user)
-    const branchId = req.user.branch_id; 
+    const branchId = req.user.branch_id;
 
     // 📦 FULL REQUEST BODY (for debugging)
     console.log("📦 FULL REQUEST BODY:", JSON.stringify(req.body, null, 2));
-    
+
     // Note: branch_id is removed from the destructured body
     const {
         staff_name, staff_id, gross_amount, deduction, payable_amount,
@@ -406,7 +468,7 @@ router.post("/submit-flatlock-payment", auth, async (req, res) => {
             const [staffRows] = await connection.query(
                 // Use secured branchId here
                 `SELECT id FROM staff WHERE full_name = ? AND branch_id = ? LIMIT 1`,
-                [staff_name, branchId] 
+                [staff_name, branchId]
             );
             if (staffRows.length > 0) {
                 finalStaffId = staffRows[0].id;
@@ -448,23 +510,20 @@ router.post("/submit-flatlock-payment", auth, async (req, res) => {
         // 🔥 Handle Advance Payment
         let advanceResult = { success: true, adjustment_type: 'none' };
         if (safeAdvanceAmountPaid !== 0 && finalStaffId) {
-            console.log("🔥 Calling handleAdvancePayment for Flatlock");
             advanceResult = await handleAdvancePayment(
-                connection, 
-                finalStaffId, 
+                connection,
+                finalStaffId,
                 staff_name,
-                safeAdvanceAmountPaid, 
-                // Use secured branchId here
-                branchId,
-                'flatlock'
+                safeAdvanceAmountPaid,
+                branchId,           // or secured branchId for flatlock route
+                'flatlock'        // 'singer', 'flatlock', or 'overlock'
             );
-            console.log("📊 Flatlock Advance Result:", advanceResult);
         }
 
         await connection.commit();
-        res.status(200).json({ 
-            success: true, 
-            message: "Flatlock payment submitted successfully", 
+        res.status(200).json({
+            success: true,
+            message: "Flatlock payment submitted successfully",
             paymentId,
             advanceDeducted: advanceResult.adjustment_type === 'deduction' ? safeAdvanceAmountPaid : 0,
             bonusAdded: advanceResult.adjustment_type === 'bonus' ? Math.abs(safeAdvanceAmountPaid) : 0
@@ -543,22 +602,21 @@ router.post("/submit-overlock-payment", auth, async (req, res) => {
         // 🔥 Handle Advance Payment
         let advanceResult = { success: true, adjustment_type: 'none' };
         if (safeAdvanceAmountPaid !== 0 && finalStaffId) {
-            console.log("🔥 Calling handleAdvancePayment for Overlock");
             advanceResult = await handleAdvancePayment(
-                connection, 
-                finalStaffId, 
+                connection,
+                finalStaffId,
                 staff_name,
-                safeAdvanceAmountPaid, 
-                branch_id,
-                'overlock'
+                safeAdvanceAmountPaid,
+                branch_id,           // or secured branchId for flatlock route
+                'overlock'        // 'singer', 'flatlock', or 'overlock'
             );
-            console.log("📊 Overlock Advance Result:", advanceResult);
         }
 
+
         await connection.commit();
-        res.status(200).json({ 
-            success: true, 
-            message: "Overlock payment submitted successfully", 
+        res.status(200).json({
+            success: true,
+            message: "Overlock payment submitted successfully",
             paymentId,
             advanceDeducted: advanceResult.adjustment_type === 'deduction' ? safeAdvanceAmountPaid : 0,
             bonusAdded: advanceResult.adjustment_type === 'bonus' ? Math.abs(safeAdvanceAmountPaid) : 0
