@@ -277,6 +277,7 @@ router.get("/wage-entries/:operatorName", auth, async (req, res) => {
 // -------------------------------------------------------------------------------------
 
 // Fetch a single paid receipt and its associated entries (✅ FIX APPLIED HERE)
+// Fetch a single paid receipt and its associated entries (IMPROVED VERSION)
 router.get("/receipt/:receiptId", auth, async (req, res) => {
     try {
         const { receiptId } = req.params;
@@ -298,43 +299,69 @@ router.get("/receipt/:receiptId", auth, async (req, res) => {
         const receiptDetails = receiptRows[0];
         let entryRows = [];
 
+        // ✅ IMPROVED: Better error handling and validation
         if (receiptDetails.entry_ids) {
             try {
-                // Ensure entryIds are safe for the SQL query
-                const entryIds = JSON.parse(receiptDetails.entry_ids).map(id => parseInt(id)).filter(id => !isNaN(id));
+                let entryIds = [];
                 
+                // Parse JSON safely
+                if (typeof receiptDetails.entry_ids === 'string') {
+                    entryIds = JSON.parse(receiptDetails.entry_ids);
+                } else {
+                    entryIds = receiptDetails.entry_ids;
+                }
+                
+                // Ensure it's an array and has valid IDs
                 if (Array.isArray(entryIds) && entryIds.length > 0) {
-                    const placeholders = entryIds.map(() => '?').join(',');
+                    // Convert to numbers and filter out invalid ones
+                    const validIds = entryIds
+                        .map(id => parseInt(id))
+                        .filter(id => !isNaN(id) && id > 0);
                     
-                    // 💡 FIX: Select and alias columns to match frontend's expected data structure
-                    const [entries] = await pool.query(
-                        `SELECT 
-                            id,
-                            inward_number,
-                            product_name,
-                            total_pcs AS pieces,         
-                            weight_of_fabric,
-                            gross_amount,
-                            created_at AS date           
-                        FROM cutting_entries 
-                        WHERE id IN (${placeholders}) AND branch_id = ?`,
-                        [...entryIds, branchId]
-                    );
-                    entryRows = entries;
+                    if (validIds.length > 0) {
+                        const placeholders = validIds.map(() => '?').join(',');
+                        
+                        const [entries] = await pool.query(
+                            `SELECT 
+                                id,
+                                inward_number,
+                                product_name,
+                                total_pcs AS pieces,         
+                                weight_of_fabric AS weight,
+                                gross_amount,
+                                created_at AS date           
+                            FROM cutting_entries 
+                            WHERE id IN (${placeholders}) AND branch_id = ?
+                            ORDER BY created_at DESC`,
+                            [...validIds, branchId]
+                        );
+                        
+                        entryRows = entries;
+                        console.log(`Found ${entryRows.length} entries for receipt ${receiptId}`);
+                    } else {
+                        console.warn(`No valid entry IDs found in receipt ${receiptId}`);
+                    }
                 }
             } catch (parseError) {
                 console.error('Error parsing entry_ids or fetching details:', parseError);
+                // Don't fail the whole request, just return empty entries
             }
         }
         
-        res.json({ receiptDetails, entries: entryRows });
+        res.json({ 
+            receiptDetails, 
+            entries: entryRows,
+            totalEntries: entryRows.length 
+        });
 
     } catch (error) {
         console.error('Error fetching receipt details:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ 
+            error: 'Internal Server Error',
+            details: error.message 
+        });
     }
 });
-
 // -------------------------------------------------------------------------------------
 
 // Get pending advance balance for staff

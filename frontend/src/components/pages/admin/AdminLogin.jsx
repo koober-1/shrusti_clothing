@@ -11,13 +11,17 @@ export default function BranchLogin() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-    
       const res = await axios.post(`${apiBaseUrl}/api/branch/login`, {
         email,
         password,
       });
+
+      // ✅ Save token and redirect to Dashboard.jsx
       localStorage.setItem("branchToken", res.data.token);
-      navigate(`/admin/${res.data.branch_id}/dashboard`);
+      localStorage.setItem("branchId", res.data.branch_id);
+
+      // ✅ Redirect to main dashboard page (Dashboard.jsx)
+      navigate(`/admin/${res.data.branch_id}/dashboard/view-report`);
     } catch (err) {
       alert(err.response?.data?.message || "Login failed");
     }

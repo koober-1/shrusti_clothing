@@ -4,16 +4,16 @@ import { useNavigate, Outlet, useLocation, useParams } from 'react-router-dom';
 import { 
     FaSearch, FaBolt, FaUserCircle, FaTachometerAlt, FaIndustry, 
     FaTshirt, FaUsers, FaCut, FaMoneyBillWave, FaWallet, FaUserTie,
-    FaChevronRight, FaChevronDown 
+    FaChevronRight, FaChevronDown, FaSignOutAlt, FaUser 
 } from 'react-icons/fa';
 
+// ... (sidebarItems array remains the same)
 const sidebarItems = [
     {
         label: 'Dashboard',
         icon: <FaTachometerAlt />,
         children: [
             { label: 'View Report', path: 'view-report' },
-            { label: 'Business Summary', path: 'business-summary' },
         ]
     },
     {
@@ -77,10 +77,14 @@ const sidebarItems = [
         ]
     },
 ];
+// ... (sidebarItems array remains the same)
 
 const AdminDashboard = () => {
     const [openSubmenu, setOpenSubmenu] = useState('Fabric Inward');
     const [showQuickActions, setShowQuickActions] = useState(false);
+    // NEW STATE for User Dropdown
+    const [showUserDropdown, setShowUserDropdown] = useState(false); 
+    
     const navigate = useNavigate();
     const location = useLocation();
     const { branchId } = useParams();
@@ -98,6 +102,20 @@ const AdminDashboard = () => {
     const handleQuickActionClick = (path) => {
         navigate(`/admin/${branchId}/dashboard/${path}`);
         setShowQuickActions(false);
+    };
+
+    // NEW FUNCTION for User Profile/Logout
+    const handleLogout = () => {
+        console.log("Logging out...");
+        // ** Replace this with your actual logout logic (e.g., clearing tokens, global state)**
+        navigate('/login'); // Assuming '/login' is your login route
+    };
+
+    // NEW FUNCTION for View Profile
+    const handleViewProfile = () => {
+        setShowUserDropdown(false);
+        // Replace 'profile' with your actual profile route path
+        navigate(`/admin/${branchId}/dashboard/profile`); 
     };
 
     return (
@@ -130,7 +148,10 @@ const AdminDashboard = () => {
                                 {item.children && openSubmenu === item.label && (
                                     <div className="pl-8 text-sm flex flex-col space-y-1 my-1">
                                         {item.children.map((child, childIndex) => {
-                                            const isChildActive = location.pathname.endsWith(child.path);
+                                            // Fixing child active state logic to check if path *ends* with child path
+                                            const pathToCheck = `/admin/${branchId}/dashboard/${child.path}`;
+                                            const isChildActive = location.pathname === pathToCheck;
+
                                             return (
                                                 <button
                                                     key={childIndex}
@@ -170,13 +191,16 @@ const AdminDashboard = () => {
                     <div className="flex items-center space-x-4">
                         <div className="relative">
                             <button
-                                onClick={() => setShowQuickActions(!showQuickActions)}
+                                onClick={() => {
+                                    setShowQuickActions(!showQuickActions);
+                                    setShowUserDropdown(false); // Close user dropdown when opening quick actions
+                                }}
                                 className="bg-white text-[#0071bc] flex items-center px-4 py-2 rounded-full text-sm font-semibold"
                             >
                                 <FaBolt className="mr-1" /> Quick Actions
                             </button>
                             {showQuickActions && (
-                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
                                     <button
                                         onClick={() => handleQuickActionClick('wages/add')}
                                         className="block w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100"
@@ -192,7 +216,36 @@ const AdminDashboard = () => {
                                 </div>
                             )}
                         </div>
-                        <FaUserCircle size={40} className='text-white' />
+                        
+                        {/* User Profile Dropdown - FIX APPLIED HERE */}
+                        <div className="relative">
+                            <button
+                                onClick={() => {
+                                    setShowUserDropdown(!showUserDropdown);
+                                    setShowQuickActions(false); // Close quick actions when opening user dropdown
+                                }}
+                                className="focus:outline-none"
+                            >
+                                <FaUserCircle size={40} className='text-white' />
+                            </button>
+                            {showUserDropdown && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20">
+                                    <button
+                                        onClick={handleViewProfile}
+                                        className="block w-full text-left px-4 py-2 text-gray-800 hover:bg-gray-100 flex items-center space-x-2"
+                                    >
+                                        <FaUser className="w-4 h-4" /> <span>View Profile</span>
+                                    </button>
+                                    <div className="border-t border-gray-100 my-1"></div>
+                                    <button
+                                        onClick={handleLogout}
+                                        className="block w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 flex items-center space-x-2"
+                                    >
+                                        <FaSignOutAlt className="w-4 h-4" /> <span>Logout</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </header>
 

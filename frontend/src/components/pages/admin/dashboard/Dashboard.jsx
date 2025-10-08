@@ -335,7 +335,7 @@ const Dashboard = () => {
         
         {/* Cutting Chart (Left Column) */}
         <div className="bg-white p-6 rounded-xl shadow-lg border">
-          <h2 className="text-xl font-semibold mb-4 text-blue-700">Cutting Entries (Scrollable)</h2>
+          <h2 className="text-xl font-semibold mb-4 text-blue-700">Cutting Entries </h2>
           {cuttingData.length > 0 ? (
             <div style={{ overflowX: 'auto' }}> {/* Added scroll container */}
               <LineChart width={cuttingChartWidth} height={300} data={cuttingData}> {/* Removed ResponsiveContainer, set dynamic width */}
@@ -370,7 +370,7 @@ const Dashboard = () => {
 
         {/* Wages Chart (Right Column) */}
         <div className="bg-white p-6 rounded-xl shadow-lg border">
-          <h2 className="text-xl font-semibold mb-4 text-green-700">Wages Entries (Scrollable)</h2>
+          <h2 className="text-xl font-semibold mb-4 text-green-700">Wages Entries</h2>
           {wagesData.length > 0 ? (
             <div style={{ overflowX: 'auto' }}> {/* Added scroll container */}
               <LineChart width={wagesChartWidth} height={300} data={wagesData}> {/* Removed ResponsiveContainer, set dynamic width */}

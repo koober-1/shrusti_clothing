@@ -8,7 +8,7 @@ import ShrustiLogo from '../../../../assets/shrusti-logo.png';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
-// Helper function to decode JWT token without an external library
+// Helper function to decode JWT token
 const decodeJwt = (token) => {
   try {
     const base64Url = token.split(".")[1];
@@ -31,12 +31,12 @@ const formatDate = (dateStr) => {
   if (!dateStr) return "N/A";
   const d = new Date(dateStr);
   if (!isNaN(d.getTime())) {
-    return d.toLocaleDateString("en-GB"); // DD/MM/YYYY
+    return d.toLocaleDateString("en-GB");
   }
   return dateStr;
 };
 
-// Updated ReceiptToPrint Component with Color field
+// ReceiptToPrint Component
 const ReceiptToPrint = forwardRef(({ receiptData }, ref) => {
   if (!receiptData) {
     return null;
@@ -144,7 +144,6 @@ const ReceiptToPrint = forwardRef(({ receiptData }, ref) => {
 
   return (
     <div ref={ref} style={styles.container}>
-      {/* Header Section */}
       <div style={styles.header}>
         <div style={styles.logoSection}>
           <img src={ShrustiLogo} alt="Shrusti Logo" style={styles.logo} />
@@ -156,7 +155,6 @@ const ReceiptToPrint = forwardRef(({ receiptData }, ref) => {
         <h2 style={styles.wagesTitle}>WAGES</h2>
       </div>
       
-      {/* Receipt Details */}
       <div style={styles.receiptDetails}>
         <div style={styles.dateIdRow}>
           <p style={styles.dateText}>{new Date(date).toLocaleDateString("en-GB")}</p>
@@ -171,7 +169,6 @@ const ReceiptToPrint = forwardRef(({ receiptData }, ref) => {
         </div>
       </div>
       
-      {/* Barcode Section */}
       <div style={styles.barcodeSection}>
         <Barcode value={unique_number} width={1} height={40} displayValue={false} />
         <p style={styles.uniqueNumber}>
@@ -197,6 +194,9 @@ const AllSuppliers = () => {
   const [branchId, setBranchId] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [receiptToPrint, setReceiptToPrint] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [receiptToDelete, setReceiptToDelete] = useState(null);
+  const [viewingSupplierId, setViewingSupplierId] = useState(null);
   
   const receiptRef = useRef();
 
@@ -256,13 +256,12 @@ const AllSuppliers = () => {
     fetchSuppliers();
   }, [branchId, navigate]);
 
-  // Function to find duplicates and filter unique records (ONLY NON-COMPLETED)
+  // Process receipts to find duplicates
   const processReceipts = (receipts) => {
     const availableReceipts = receipts.filter(receipt => 
       !receipt.status || receipt.status !== 'cutting_completed'
     );
 
-    // Group receipts by invoice_no
     const groupedByInvoice = availableReceipts.reduce((acc, receipt) => {
       const invoiceNo = receipt.invoice_no;
       if (!acc[invoiceNo]) {
@@ -272,7 +271,6 @@ const AllSuppliers = () => {
       return acc;
     }, {});
 
-    // Filter out duplicates (keep only first occurrence of each invoice_no)
     const uniqueReceipts = [];
     const duplicateInvoices = {};
 
@@ -288,7 +286,7 @@ const AllSuppliers = () => {
     return { uniqueReceipts, duplicateInvoices };
   };
 
-  // Calculate total weight for invoice (including duplicates)
+  // Calculate total weight for invoice
   const calculateInvoiceTotalWeight = (invoiceNo, allReceipts) => {
     const invoiceReceipts = allReceipts.filter(receipt => 
       receipt.invoice_no === invoiceNo && (!receipt.status || receipt.status !== 'cutting_completed')
@@ -299,7 +297,7 @@ const AllSuppliers = () => {
     }, 0).toFixed(2);
   };
 
-  // Handle clicking on duplicate invoice number with total weight
+  // Handle duplicate click
   const handleDuplicateClick = (invoiceNo, allReceipts) => {
     const availableReceipts = allReceipts.filter(receipt => 
       !receipt.status || receipt.status !== 'cutting_completed'
@@ -311,7 +309,7 @@ const AllSuppliers = () => {
     setShowDuplicateModal(true);
   };
 
-  // Calculate total weight for duplicate invoice
+  // Calculate total weight
   const calculateTotalWeight = (receipts) => {
     return receipts.reduce((total, receipt) => {
       const weight = parseFloat(receipt.weight_of_material) || 0;
@@ -324,6 +322,7 @@ const AllSuppliers = () => {
     setError(null);
     const supplier = suppliers.find((s) => s.id === supplierId);
     setViewingSupplierName(supplier?.supplier_name);
+    setViewingSupplierId(supplierId);
     try {
       const res = await fetchWithAuth(`${apiBaseUrl}/api/receipts/by-supplier/${supplierId}`, { branchId });
       if (res) {
@@ -343,6 +342,7 @@ const AllSuppliers = () => {
     setShowStockModal(false);
     setSelectedSupplierReceipts([]);
     setViewingSupplierName(null);
+    setViewingSupplierId(null);
   };
 
   const handleCloseDuplicateModal = () => {
@@ -357,7 +357,7 @@ const AllSuppliers = () => {
     setShowPrintModal(true);
   };
   
-  // PDF generation logic
+  // PDF generation
   const handleGeneratePDF = async () => {
     if (!receiptRef.current) return;
     
@@ -375,6 +375,55 @@ const AllSuppliers = () => {
     }
   };
 
+  // 🔥 NEW: Delete Receipt Handler
+  const handleDeleteClick = (receipt) => {
+    setReceiptToDelete(receipt);
+    setShowDeleteConfirm(true);
+  };
+
+  // 🔥 NEW: Confirm Delete
+  const handleConfirmDelete = async () => {
+    if (!receiptToDelete) return;
+
+    const token = localStorage.getItem("branchToken");
+    if (!token) {
+      setError("Login required.");
+      navigate("/login");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await axios.delete(`${apiBaseUrl}/api/receipts/${receiptToDelete.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { branchId }
+      });
+
+      // Refresh the stock data
+      if (viewingSupplierId) {
+        const res = await fetchWithAuth(`${apiBaseUrl}/api/receipts/by-supplier/${viewingSupplierId}`, { branchId });
+        if (res) {
+          setSelectedSupplierReceipts(res.data);
+        }
+      }
+
+      setShowDeleteConfirm(false);
+      setReceiptToDelete(null);
+      alert("Receipt deleted successfully!");
+    } catch (err) {
+      console.error("Error deleting receipt:", err);
+      alert(err.response?.data?.error || "Failed to delete receipt.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔥 NEW: Cancel Delete
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setReceiptToDelete(null);
+  };
+
   if (!branchId || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -383,7 +432,7 @@ const AllSuppliers = () => {
     );
   }
 
-  // Process receipts to handle duplicates (only available receipts)
+  // Process receipts
   const { uniqueReceipts, duplicateInvoices } = processReceipts(selectedSupplierReceipts);
 
   return (
@@ -423,7 +472,7 @@ const AllSuppliers = () => {
         <div className="text-center text-gray-500">No suppliers found.</div>
       )}
 
-      {/* Main Stock Modal - REMOVED ACTION COLUMN */}
+      {/* 🔥 MODIFIED: Stock Modal with Delete Button in Action Column */}
       {showStockModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-auto">
           <div className="bg-white p-6 rounded-lg shadow-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto text-gray-800">
@@ -454,6 +503,7 @@ const AllSuppliers = () => {
                       <th className="border border-gray-200 px-4 py-2 text-left">Color</th>
                       <th className="border border-gray-200 px-4 py-2 text-left">Weight</th>
                       <th className="border border-gray-200 px-4 py-2 text-left">Status</th>
+                      <th className="border border-gray-200 px-4 py-2 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -492,6 +542,15 @@ const AllSuppliers = () => {
                           <td className="border border-gray-200 px-4 py-2">
                             <span className="text-green-600 font-semibold">Available</span>
                           </td>
+                          <td className="border border-gray-200 px-4 py-2 text-center">
+                            <button
+                              onClick={() => handleDeleteClick(receipt)}
+                              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
+                              title="Delete this receipt"
+                            >
+                              Delete
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -505,7 +564,7 @@ const AllSuppliers = () => {
         </div>
       )}
 
-      {/* Duplicate Records Modal with Total Weight */}
+      {/* 🔥 MODIFIED: Duplicate Modal with Delete Button */}
       {showDuplicateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 overflow-auto">
           <div className="bg-white p-6 rounded-lg shadow-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto text-gray-800">
@@ -540,6 +599,7 @@ const AllSuppliers = () => {
                       <th className="border border-gray-200 px-4 py-2 text-left">Color</th>
                       <th className="border border-gray-200 px-4 py-2 text-left">Weight</th>
                       <th className="border border-gray-200 px-4 py-2 text-left">Status</th>
+                      <th className="border border-gray-200 px-4 py-2 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -558,6 +618,15 @@ const AllSuppliers = () => {
                         <td className="border border-gray-200 px-4 py-2">
                           <span className="text-green-600 font-semibold">Available</span>
                         </td>
+                        <td className="border border-gray-200 px-4 py-2 text-center">
+                          <button
+                            onClick={() => handleDeleteClick(receipt)}
+                            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
+                            title="Delete this receipt"
+                          >
+                            Delete
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -574,6 +643,40 @@ const AllSuppliers = () => {
             ) : (
               <div className="text-center text-gray-500">No duplicate records found.</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 NEW: Delete Confirmation Modal */}
+      {showDeleteConfirm && receiptToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[70]">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Confirm Delete</h2>
+            <p className="text-gray-600 mb-2">
+              Are you sure you want to delete this receipt?
+            </p>
+            <div className="bg-gray-50 p-3 rounded mb-4 text-sm">
+              <p><strong>Unique Number:</strong> {receiptToDelete.unique_number}</p>
+              <p><strong>Invoice No:</strong> {receiptToDelete.invoice_no}</p>
+              <p><strong>Weight:</strong> {receiptToDelete.weight_of_material} kg</p>
+            </div>
+            <p className="text-red-600 font-semibold mb-4">
+              ⚠️ This action cannot be undone!
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handleCancelDelete}
+                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+              >
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

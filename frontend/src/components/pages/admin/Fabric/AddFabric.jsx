@@ -31,10 +31,10 @@ const getTodayDateDDMMYYYY = () => {
     return `${day}/${month}/${year}`;
 };
 
-// Function to generate a 12-digit unique number for EAN13
+// Function to generate a 10-digit unique number
 const generateUniqueNumber = () => {
-    // EAN-13 standard requires 12 data digits (plus 1 check digit)
-    return Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    // Generates a random number between 1,000,000,000 and 9,999,999,999 (always 10 digits)
+    return Math.floor(1000000000 + Math.random() * 9000000000).toString();
 };
 
 // Helper function to convert image to base64
@@ -491,7 +491,7 @@ export default function App() {
                             
                             <div class="barcode-container">
                                 ${barcodeRef.current.innerHTML}
-                                <p class="barcode-number">${barcodeData.value}</p>
+                                
                             </div>
                         </div>
                     </body>
@@ -700,13 +700,13 @@ export default function App() {
                                     })()
                                 }
                                 
-                                {/* Barcode Section - Changed format to EAN13 */}
+                                {/* Barcode Section */}
                                 <div ref={barcodeRef} className="flex flex-col items-center mt-6">
                                     <Barcode 
                                         value={barcodeData.value} 
-                                        format="EAN13" 
-                                        width={1.5} // Adjusted width for better EAN-13 look
-                                        height={50} // Adjusted height
+                                        format="CODE128" 
+                                        width={2.0} 
+                                        height={60} 
                                         displayValue={false} 
                                         background="transparent" 
                                     />
