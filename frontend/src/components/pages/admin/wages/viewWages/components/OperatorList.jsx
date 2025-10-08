@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { hasUnpaidJobs } from "../utils/WagesUtils.js";
 
 const OperatorList = ({
   groupedData,
@@ -11,10 +10,8 @@ const OperatorList = ({
   pendingBalances,
   showPayButton = true,
 }) => {
-  // 🔥 NEW: Track editable payable amounts for each operator
   const [editablePayables, setEditablePayables] = useState({});
 
-  // 🔥 Initialize editable payables when data changes
   useEffect(() => {
     const initialPayables = {};
     Object.entries(groupedData).forEach(([operator, jobs]) => {
@@ -42,7 +39,6 @@ const OperatorList = ({
     setEditablePayables(initialPayables);
   }, [groupedData, pendingBalances, activeTab]);
 
-  // 🔥 Handle payable amount change
   const handlePayableChange = (operator, newPayable) => {
     const payableNum = parseFloat(newPayable) || 0;
     const current = editablePayables[operator];
@@ -50,14 +46,7 @@ const OperatorList = ({
     if (!current) return;
 
     const grossNum = parseFloat(current.gross);
-    
-    // 🔥 Calculate advance deduction dynamically
     let newAdvance = grossNum - payableNum;
-    
-    // 🔥 If payable > gross, it means BONUS (negative advance)
-    if (payableNum > grossNum) {
-      newAdvance = grossNum - payableNum; // Will be negative (bonus)
-    }
 
     setEditablePayables(prev => ({
       ...prev,
@@ -82,29 +71,17 @@ const OperatorList = ({
       <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
         <thead className="bg-gray-200">
           <tr>
-            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">
-              S. No.
-            </th>
-            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">
-              Operator Name
-            </th>
-            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">
-              Total Pieces
-            </th>
-            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">
-              Gross Amount (₹)
-            </th>
+            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">S. No.</th>
+            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">Operator Name</th>
+            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">Total Pieces</th>
+            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">Gross Amount (₹)</th>
             {showPayButton && (
-              <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">
-                Pending Advance (₹)
-              </th>
+              <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">Pending Advance (₹)</th>
             )}
             <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">
               {showPayButton ? "Payable Amount (₹)" : "Amount Paid (₹)"}
             </th>
-            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">
-              Action
-            </th>
+            <th className="py-2 px-4 border-b text-left text-sm font-semibold text-gray-600">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -128,7 +105,6 @@ const OperatorList = ({
               0
             );
 
-            // 🔥 Get editable values
             const currentEditable = editablePayables[operator] || {
               payable: totalGrossAmount.toFixed(2),
               advance: "0.00",
@@ -138,21 +114,14 @@ const OperatorList = ({
             const displayPayable = parseFloat(currentEditable.payable);
             const displayAdvance = parseFloat(currentEditable.advance);
 
-            // Paid Tab values
-            const paidGrossAmount =
-              firstJob.paid_gross_amount !== undefined
-                ? parseFloat(firstJob.paid_gross_amount)
-                : totalGrossAmount;
-
-            const paidFinalAmount =
-              firstJob.paid_final_amount !== undefined
-                ? parseFloat(firstJob.paid_final_amount)
-                : displayPayable;
-
-            const advanceDeducted =
-              firstJob.advance_deducted !== undefined
-                ? parseFloat(firstJob.advance_deducted)
-                : displayAdvance;
+            // ✅ FIX: Paid values from first job or calculated
+            const advanceDeducted = firstJob.advance_deducted !== undefined 
+              ? parseFloat(firstJob.advance_deducted) 
+              : 0;
+            
+            const paidFinalAmount = firstJob.paid_final_amount !== undefined
+              ? parseFloat(firstJob.paid_final_amount)
+              : (totalGrossAmount - advanceDeducted);
 
             const getPaymentInfo = () => {
               let paymentId = null;
@@ -185,23 +154,26 @@ const OperatorList = ({
 
             const paymentInfo = getPaymentInfo();
 
-            const baseOperator = operator.includes(" (Payment #")
-              ? operator.split(" (Payment #")[0]
-              : operator;
+            // ✅ FIX: Check if operator has unpaid jobs
+            const hasUnpaidJobsForOperator = jobs.some(job => {
+              switch(activeTab) {
+                case 'singer':
+                  return !job.singer_paid;
+                case 'flatlock':
+                  return !job.flatlock_paid;
+                case 'overlock':
+                  return !job.overlock_paid;
+                default:
+                  return !job.is_paid;
+              }
+            });
 
-            const operatorHasUnpaidJobs = hasUnpaidJobs(
-              baseOperator,
-              jobs,
-              activeTab
-            );
-
-            const shouldShowPayButton = showPayButton && operatorHasUnpaidJobs;
+            const shouldShowPayButton = showPayButton && hasUnpaidJobsForOperator;
 
             return (
               <tr key={operator} className="hover:bg-gray-50">
-                <td className="py-2 px-4 border-b text-sm text-gray-700">
-                  {index + 1}
-                </td>
+                <td className="py-2 px-4 border-b text-sm text-gray-700">{index + 1}</td>
+                
                 <td
                   className="py-2 px-4 border-b text-sm text-blue-600 font-medium cursor-pointer hover:underline"
                   onClick={() => onOperatorClick(operator, jobs)}
@@ -215,17 +187,16 @@ const OperatorList = ({
                     )}
                   </div>
                 </td>
+
                 <td
                   className="py-2 px-4 border-b text-sm text-green-600 font-semibold cursor-pointer hover:underline"
                   onClick={() => onViewDetails(jobs, operator)}
                 >
                   {totalPieces}
                 </td>
+
                 <td className="py-2 px-4 border-b text-sm text-gray-700">
-                  ₹
-                  {showPayButton
-                    ? totalGrossAmount.toFixed(2)
-                    : paidGrossAmount.toFixed(2)}
+                  ₹{totalGrossAmount.toFixed(2)}
                 </td>
 
                 {showPayButton && (
@@ -236,9 +207,7 @@ const OperatorList = ({
                         {Math.abs(displayAdvance).toFixed(2)}
                       </span>
                       {displayAdvance < 0 && (
-                        <span className="text-xs text-green-500">
-                          (Bonus Payment)
-                        </span>
+                        <span className="text-xs text-green-500">(Bonus Payment)</span>
                       )}
                     </div>
                   </td>
@@ -247,7 +216,6 @@ const OperatorList = ({
                 <td className="py-2 px-4 border-b text-sm">
                   {showPayButton ? (
                     <div className="flex flex-col gap-2">
-                      {/* 🔥 EDITABLE INPUT */}
                       <input
                         type="number"
                         step="0.01"
@@ -258,40 +226,25 @@ const OperatorList = ({
                       />
                       <div className="text-xs text-gray-500">
                         {displayAdvance > 0 && (
-                          <span className="text-red-500">
-                            (₹{displayAdvance.toFixed(2)} advance deducted)
-                          </span>
+                          <span className="text-red-500">(₹{displayAdvance.toFixed(2)} advance deducted)</span>
                         )}
                         {displayAdvance < 0 && (
-                          <span className="text-green-500">
-                            (+₹{Math.abs(displayAdvance).toFixed(2)} bonus added)
-                          </span>
+                          <span className="text-green-500">(+₹{Math.abs(displayAdvance).toFixed(2)} bonus added)</span>
                         )}
-                        {displayAdvance === 0 && (
-                          <span>(No advance adjustment)</span>
-                        )}
+                        {displayAdvance === 0 && <span>(No advance adjustment)</span>}
                       </div>
                     </div>
                   ) : (
                     <div className="flex flex-col">
-                      <span className="text-green-700 font-bold">
-                        ₹{paidFinalAmount.toFixed(2)}
-                      </span>
+                      <span className="text-green-700 font-bold">₹{paidFinalAmount.toFixed(2)}</span>
                       <div className="text-xs text-gray-500">
-                        Paid on:{" "}
-                        {paymentInfo.paidAt
-                          ? new Date(paymentInfo.paidAt).toLocaleDateString("en-GB")
-                          : "--"}
+                        Paid on: {paymentInfo.paidAt ? new Date(paymentInfo.paidAt).toLocaleDateString("en-GB") : "--"}
                         {advanceDeducted !== 0 && (
                           <div className="text-xs mt-1">
                             {advanceDeducted > 0 ? (
-                              <span className="text-red-500">
-                                (₹{advanceDeducted.toFixed(2)} deducted)
-                              </span>
+                              <span className="text-red-500">(₹{advanceDeducted.toFixed(2)} deducted)</span>
                             ) : (
-                              <span className="text-green-500">
-                                (+₹{Math.abs(advanceDeducted).toFixed(2)} bonus)
-                              </span>
+                              <span className="text-green-500">(+₹{Math.abs(advanceDeducted).toFixed(2)} bonus)</span>
                             )}
                           </div>
                         )}
@@ -307,12 +260,11 @@ const OperatorList = ({
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          // 🔥 Pass calculated advance to receipt generation
                           onGenerateReceipt(operator, jobs, displayAdvance);
                         }}
                         className="bg-green-500 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-green-600"
                       >
-                        Pay & Receipt
+                        💰 Pay & Receipt
                       </button>
                     ) : (
                       <span className="text-green-600 font-medium flex items-center gap-1">
@@ -320,22 +272,17 @@ const OperatorList = ({
                       </span>
                     )
                   ) : (
+                    // ✅ FIX: PAID TAB - Always show Print Receipt button
                     <div className="flex flex-col gap-1">
                       <button
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          onReprintReceipt &&
-                            onReprintReceipt(operator, jobs, {
-                              paidGrossAmount,
-                              paidFinalAmount,
-                              advanceDeducted,
-                              paymentInfo,
-                            });
+                          onReprintReceipt && onReprintReceipt(operator, jobs);
                         }}
                         className="bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-blue-600"
                       >
-                        Print Receipt
+                        🖨️ Print Receipt
                       </button>
                       <span className="text-xs text-green-600 font-medium">
                         ✓ Paid by {paymentInfo?.paymentType || "Cash"}
