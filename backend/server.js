@@ -25,6 +25,7 @@ const advancePaymentsRoutes = require('./routes/advancePayment'); // NOTE: File 
 const rangesRouter = require('./routes/ranges');
 const cuttingEntryRoutes = require("./routes/cuttingEntry");
 const wagesRouter = require('./routes/wages');
+const jobWorkerRouter = require('./routes/job_worker');
 const dashboardRoutes = require('./routes/dashboard');
 app.get('/', (req, res) => res.json({ status: 'ok', service: 'multi-branch-backend' }));
 
@@ -40,6 +41,7 @@ app.use('/api/ranges', rangesRouter);
 app.use('/api/advance-payments', advancePaymentsRoutes); // FIXED: PLURAL path!
 app.use("/api/cutting-entry", cuttingEntryRoutes);
 app.use('/api/wages', wagesRouter);
+app.use('/api/job-worker', jobWorkerRouter);
 app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/test-db', async (req, res) => {
