@@ -71,9 +71,10 @@ const sidebarItems = [
         label: 'Job Worker',
         icon: <FaUserTie />,
         children: [
-            { label: 'View All Job Workers', path: 'job-worker/view' },
+            { label: 'View All Job Workers', path: 'job-worker/list' },
             { label: 'Add New Job Worker', path: 'job-worker/add' },
-            { label: 'Assign Slip', path: 'job-worker/assign' },
+            // { label: 'Add Product Price', path: 'job-worker/product' },
+            { label: 'Product Job Worker', path: 'job-worker/product-list' },
         ]
     },
 ];

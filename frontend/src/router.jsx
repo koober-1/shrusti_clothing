@@ -29,6 +29,13 @@ import ViewCutting from "./components/pages/admin/cutting/ViewCutting.jsx";
 import AddNewWages from "./components/pages/admin/wages/AddNewWages.jsx";
 import ViewAllWages from "./components/pages/admin/wages/ViewAllWages.jsx";
 
+
+// ---------- {/* ✅ New Job Worker route */} ----------
+import CreateJobwoker from "./components/pages/admin/Job_Worker/Create_Job_worker.jsx";
+import ListJobwoker from "./components/pages/admin/Job_Worker/List_Job_worker.jsx";
+import ProductJobwoker from "./components/pages/admin/Job_Worker/Product_Price.jsx";
+import ListProductJobwoker from "./components/pages/admin/Job_Worker/ViewJobWorkerProductEntriesPage.jsx";
+
 // ---------- DASHBOARD IMPORT ----------
 import Dashboard from "./components/pages/admin/dashboard/Dashboard.jsx"; // 👈 Dashboard.jsx
 
@@ -91,6 +98,12 @@ export default function RouterApp() {
           {/* 🧾 Wages */}
           <Route path="wages/add" element={<AddNewWages />} />
           <Route path="wages/view" element={<ViewAllWages />} />
+
+          {/* Job Worker route */}
+          <Route path="job-worker/add" element={<CreateJobwoker />} />
+          <Route path="job-worker/list" element={<ListJobwoker />} />
+          <Route path="job-worker/product" element={<ProductJobwoker />} />
+          <Route path="job-worker/product-list" element={<ListProductJobwoker />} />
         </Route>
 
         {/* -------------------- REDIRECT UNKNOWN ROUTES TO ADMIN LOGIN -------------------- */}

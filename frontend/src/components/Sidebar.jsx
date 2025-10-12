@@ -21,7 +21,8 @@ const sidebarLinks = [
   { label: 'Add Cutting', path: '/admin/cutting/add', icon: <FaCut /> },
   { label: 'Add Advance Pay', path: '/admin/advance/add', icon: <FaMoneyBillWave /> },
   { label: 'Add Wages', path: '/admin/wages/add', icon: <FaWallet /> },
-  { label: 'Add Job Worker', path: '/admin/jobworker/add', icon: <FaUserTie /> },
+  { label: 'Add Job Worker', path: '/admin/job-worker/add', icon: <FaUserTie /> },
+  { label: 'View Job Workers', path: '/admin/job-worker/list', icon: <FaUserTie /> },
 ];
 
 const Sidebar = () => {
@@ -39,9 +40,8 @@ const Sidebar = () => {
           <div
             key={index}
             onClick={() => navigate(link.path)}
-            className={`flex items-center space-x-3 p-2 rounded cursor-pointer ${
-              location.pathname === link.path ? 'bg-blue-600' : 'hover:bg-gray-800'
-            }`}
+            className={`flex items-center space-x-3 p-2 rounded cursor-pointer ${location.pathname === link.path ? 'bg-blue-600' : 'hover:bg-gray-800'
+              }`}
           >
             <span>{link.icon}</span>
             <span>{link.label}</span>
