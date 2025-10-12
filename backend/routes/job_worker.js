@@ -30,6 +30,7 @@ router.post(
       aadharNumber,
       panNumber,
       mobileNumber,
+      fullUnitAddress
     } = req.body;
 
     const aadharFront = req.files["aadharFront"]?.[0]?.filename || null;
@@ -59,8 +60,8 @@ router.post(
       // Insert staff
       const sql = `
         INSERT INTO job_worker 
-        (branch_id, full_name, aadhar_number, pan_number, mobile_number, aadhar_front, aadhar_back, pan_card_image, photo) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (branch_id, full_name, aadhar_number, pan_number, mobile_number, aadhar_front, aadhar_back, pan_card_image, full_unit_address, photo) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const [result] = await db.query(sql, [
@@ -72,6 +73,7 @@ router.post(
         aadharFront,
         aadharBack,
         panCardImage,
+        fullUnitAddress,
         photo,
       ]);
 
@@ -98,6 +100,64 @@ router.get("/all", auth, async (req, res) => {
     res.json(results);
   } catch (err) {
     console.error("Error fetching Job Worker:", err);
+    res.status(500).json({ success: false, error: "Database error" });
+  }
+});
+
+// ================== Update Job Worker by ID ==================
+router.put("/update/:id", auth, async (req, res) => {
+  const branchId = req.user.branch_id;
+  const { id } = req.params;
+  const {
+    full_name,
+    full_unit_address,
+    mobile_number,
+    aadhar_number,
+    pan_number
+  } = req.body;
+
+  try {
+    // Check if worker exists
+    const [worker] = await db.query(
+      "SELECT * FROM job_worker WHERE id = ? AND branch_id = ?",
+      [id, branchId]
+    );
+
+    if (worker.length === 0) {
+      return res.status(404).json({ success: false, error: "Job worker not found" });
+    }
+
+    // Check for duplicates (excluding current worker)
+    const [existingStaff] = await db.query(
+      `SELECT aadhar_number, pan_number, mobile_number 
+       FROM job_worker 
+       WHERE (aadhar_number = ? OR pan_number = ? OR mobile_number = ?) AND id != ?`,
+      [aadhar_number, pan_number, mobile_number, id]
+    );
+
+    if (existingStaff.length > 0) {
+      if (existingStaff[0].aadhar_number === aadhar_number) {
+        return res.status(409).json({ success: false, error: "Aadhar number already exists." });
+      }
+      if (existingStaff[0].pan_number === pan_number) {
+        return res.status(409).json({ success: false, error: "PAN number already exists." });
+      }
+      if (existingStaff[0].mobile_number === mobile_number) {
+        return res.status(409).json({ success: false, error: "Mobile number already exists." });
+      }
+    }
+
+    // Update worker
+    await db.query(
+      `UPDATE job_worker 
+       SET full_name = ?, full_unit_address = ?, mobile_number = ?, aadhar_number = ?, pan_number = ?
+       WHERE id = ? AND branch_id = ?`,
+      [full_name, full_unit_address, mobile_number, aadhar_number, pan_number, id, branchId]
+    );
+
+    res.json({ success: true, message: "Job worker updated successfully" });
+  } catch (err) {
+    console.error("Error updating job worker:", err);
     res.status(500).json({ success: false, error: "Database error" });
   }
 });
@@ -154,16 +214,29 @@ router.delete("/:id", auth, async (req, res) => {
 // ================== Add Job Worker Product Entry ==================
 router.post("/add-product-entry", auth, async (req, res) => {
   const branchId = req.user.branch_id;
-  const { productName, productPrice } = req.body;
+  const { productName, productPrice, fabricType } = req.body;
 
   try {
     if (!productName) {
       return res.status(400).json({ success: false, error: "Product name is required" });
     }
 
+    // ---------------- Check for duplicate (product + fabric) ----------------
+    const [existing] = await db.query(
+      "SELECT id FROM job_worker_product_entry WHERE branch_id = ? AND product_name = ? AND fabric_type = ?",
+      [branchId, productName, fabricType]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, error: "Duplicate entry for same product and fabric type is not allowed" });
+    }
+
+    // ---------------- Insert new entry ----------------
     const [result] = await db.query(
-      "INSERT INTO job_worker_product_entry (branch_id, product_name, product_price) VALUES (?, ?, ?)",
-      [branchId, productName, productPrice || 0.0]
+      `INSERT INTO job_worker_product_entry 
+       (branch_id, product_name, product_price, fabric_type) 
+       VALUES (?, ?, ?, ?)`,
+      [branchId, productName, productPrice || 0.0, fabricType || null]
     );
 
     res.json({
@@ -178,8 +251,8 @@ router.post("/add-product-entry", auth, async (req, res) => {
 });
 
 // ================== Get All Product Entries ==================
-router.get("/product-entries", auth, async (req, res) => {
-  const branchId = req.user.branch_id;
+router.get("/product-entries/:branch_id", auth, async (req, res) => {
+  const branchId = req.params.branch_id;
 
   try {
     const [results] = await db.query(
@@ -279,12 +352,11 @@ router.post("/add-jobworker-entry", auth, async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    const { worker_name, aadhar_number, pan_number, mobile_number, size_wise_entry, total_pcs, branchId, product_name, 
-        gross_amount, payment_type,} = req.body;
+    const { worker_name, aadhar_number, pan_number, mobile_number, size_wise_entry, total_pcs, branchId, product_name,
+      gross_amount, payment_type, } = req.body;
 
     // ======== Validation ========
-    if ( !worker_name || !total_pcs || !branchId || !product_name || gross_amount == null) 
-    {
+    if (!worker_name || !total_pcs || !branchId || !product_name || gross_amount == null) {
       await connection.rollback();
       return res
         .status(400)
