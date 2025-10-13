@@ -35,6 +35,8 @@ import CreateJobwoker from "./components/pages/admin/Job_Worker/Create_Job_worke
 import ListJobwoker from "./components/pages/admin/Job_Worker/List_Job_worker.jsx";
 import ProductJobwoker from "./components/pages/admin/Job_Worker/Product_Price.jsx";
 import ListProductJobwoker from "./components/pages/admin/Job_Worker/ViewJobWorkerProductEntriesPage.jsx";
+import Jobwokerwages from "./components/pages/admin/Job_Worker/Create_Job_worker_wages.jsx";
+import ViewJobWorkerEntries from "./components/pages/admin/Job_Worker/List_Job_worker_wages.jsx";
 
 // ---------- DASHBOARD IMPORT ----------
 import Dashboard from "./components/pages/admin/dashboard/Dashboard.jsx"; // 👈 Dashboard.jsx
@@ -104,6 +106,8 @@ export default function RouterApp() {
           <Route path="job-worker/list" element={<ListJobwoker />} />
           <Route path="job-worker/product" element={<ProductJobwoker />} />
           <Route path="job-worker/product-list" element={<ListProductJobwoker />} />
+          <Route path="job-worker/add-wages" element={<Jobwokerwages />} />
+          <Route path="job-worker/list-wages" element={<ViewJobWorkerEntries />} />
         </Route>
 
         {/* -------------------- REDIRECT UNKNOWN ROUTES TO ADMIN LOGIN -------------------- */}

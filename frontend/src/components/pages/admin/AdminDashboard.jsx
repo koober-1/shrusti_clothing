@@ -75,6 +75,8 @@ const sidebarItems = [
             { label: 'Add New Job Worker', path: 'job-worker/add' },
             // { label: 'Add Product Price', path: 'job-worker/product' },
             { label: 'Product Job Worker', path: 'job-worker/product-list' },
+            // { label: 'Add Wages', path: 'job-worker/add-wages' },
+            { label: 'Wages List', path: 'job-worker/list-wages' },
         ]
     },
 ];

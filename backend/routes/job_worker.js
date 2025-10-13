@@ -267,24 +267,25 @@ router.get("/product-entries/:branch_id", auth, async (req, res) => {
   }
 });
 
-// ================== Get Product Entry by ID ==================
-router.get("/product-entry/:id", auth, async (req, res) => {
-  const branchId = req.user.branch_id;
-  const { id } = req.params;
 
+
+// ================== Get All Product Entries (by branch) ==================
+router.get("/product-entry/:id", auth, async (req, res) => {
   try {
+    const branchId = req.user.branch_id;
+
     const [results] = await db.query(
-      "SELECT * FROM job_worker_product_entry WHERE id = ? AND branch_id = ?",
-      [id, branchId]
+      "SELECT * FROM job_worker_product_entry WHERE branch_id = ? ORDER BY id DESC",
+      [branchId]
     );
 
     if (results.length === 0) {
-      return res.status(404).json({ success: false, error: "Product entry not found" });
+      return res.json({ success: true, data: [] }); // return empty array instead of error
     }
 
-    res.json({ success: true, data: results[0] });
+    res.json({ success: true, data: results });
   } catch (err) {
-    console.error("Error fetching product entry:", err);
+    console.error("Error fetching product entries:", err);
     res.status(500).json({ success: false, error: "Database error" });
   }
 });
@@ -347,77 +348,301 @@ router.delete("/product-entry/:id", auth, async (req, res) => {
 
 // ================== Add Job Worker Entry ==================
 router.post("/add-jobworker-entry", auth, async (req, res) => {
-  const connection = await pool.getConnection();
+  const branchId = req.user.branch_id;
+  const {
+    worker_name,
+    aadhar_number,
+    pan_number,
+    mobile_number,
+    size_wise_entry,
+    total_pcs,
+    product_name,
+    gross_amount,
+    payment_type
+  } = req.body;
 
   try {
-    await connection.beginTransaction();
-
-    const { worker_name, aadhar_number, pan_number, mobile_number, size_wise_entry, total_pcs, branchId, product_name,
-      gross_amount, payment_type, } = req.body;
-
     // ======== Validation ========
-    if (!worker_name || !total_pcs || !branchId || !product_name || gross_amount == null) {
-      await connection.rollback();
-      return res
-        .status(400)
-        .json({ error: "All required fields are missing or invalid." });
+    if (!worker_name || !total_pcs || !product_name || gross_amount == null) {
+      return res.status(400).json({
+        success: false,
+        error: "All required fields are missing or invalid."
+      });
     }
 
-    // Validate numeric fields
     const totalPcsNum = parseInt(total_pcs);
     const grossAmountNum = parseFloat(gross_amount);
 
     if (isNaN(totalPcsNum) || totalPcsNum <= 0) {
-      await connection.rollback();
-      return res
-        .status(400)
-        .json({ error: "Total pieces must be a positive number." });
+      return res.status(400).json({
+        success: false,
+        error: "Total pieces must be a positive number."
+      });
     }
 
     if (isNaN(grossAmountNum) || grossAmountNum < 0) {
-      await connection.rollback();
-      return res
-        .status(400)
-        .json({ error: "Gross amount must be a non-negative number." });
+      return res.status(400).json({
+        success: false,
+        error: "Gross amount must be a non-negative number."
+      });
     }
 
-    // ======== Insert job worker entry ========
-    await connection.query(
-      `INSERT INTO job_worker_entries 
-      (worker_name, aadhar_number, pan_number, mobile_number, size_wise_entry, total_pcs, branch_id, product_name, gross_amount, payment_type, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [
-        worker_name,
-        aadhar_number || null,
-        pan_number || null,
-        mobile_number || null,
-        JSON.stringify(size_wise_entry || {}),
-        totalPcsNum,
-        branchId,
-        product_name,
-        grossAmountNum,
-        payment_type || "Pending",
-      ]
-    );
+    // ======== Generate Random job_worker_id ========
+    const generateRandomId = () => {
+      const randomNum = Math.floor(Math.random() * 10000); // 0-9999
+      return `SC-${randomNum.toString().padStart(4, "0")}`;
+    };
+    const job_worker_id = generateRandomId();
 
-    await connection.commit();
+    // ======== Insert into DB ========
+    const sql = `
+      INSERT INTO job_worker_entries
+      (job_worker_id, worker_name, aadhar_number, pan_number, mobile_number, size_wise_entry, total_pcs, branch_id, product_name, gross_amount, payment_type, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `;
+
+    await db.query(sql, [
+      job_worker_id,
+      worker_name,
+      aadhar_number || null,
+      pan_number || null,
+      mobile_number || null,
+      JSON.stringify(size_wise_entry || {}),
+      totalPcsNum,
+      branchId,
+      product_name,
+      grossAmountNum,
+      payment_type || "Pending"
+    ]);
 
     res.status(201).json({
       success: true,
       message: "Job worker entry added successfully!",
+      job_worker_id
     });
-  } catch (error) {
-    await connection.rollback();
-    console.error("Error inserting job worker entry:", error);
+  } catch (err) {
+    console.error("Error inserting job worker entry:", err);
     res.status(500).json({
       success: false,
-      error: "Server error while adding job worker entry",
-      details: error.message,
+      error: "Database error while adding job worker entry",
+      details: err.message
     });
-  } finally {
-    connection.release();
   }
 });
 
+// ================== Get All Job Worker Entries ==================
+router.get("/all/:branch_id?", auth, async (req, res) => {
+  // Use branch_id from params if provided, otherwise fallback to token
+  const branchId = req.params.branch_id || req.user.branch_id;
+
+  try {
+    const [results] = await db.query(
+      "SELECT * FROM job_worker_entries WHERE branch_id = ? ORDER BY created_at DESC",
+      [branchId]
+    );
+
+    res.json({ success: true, data: results });
+  } catch (err) {
+    console.error("Error fetching job worker entries:", err);
+    res.status(500).json({ success: false, error: "Database error" });
+  }
+});
+
+// ================== Get Job Worker Entry by ID ==================
+router.get("/by/:job_worker_id", auth, async (req, res) => {
+  const branchId = req.user.branch_id;
+  const { job_worker_id } = req.params;
+
+  try {
+    const [results] = await db.query(
+      "SELECT * FROM job_worker_entries WHERE branch_id = ? AND job_worker_id = ?",
+      [branchId, job_worker_id]
+    );
+
+    if (results.length === 0) {
+      return res.status(404).json({ success: false, error: "Job worker entry not found" });
+    }
+
+    res.json({ success: true, data: results[0] });
+  } catch (err) {
+    console.error("Error fetching job worker entry:", err);
+    res.status(500).json({ success: false, error: "Database error" });
+  }
+});
+
+// ================== Update Job Worker Entry by ID ==================
+router.put("/update/:job_worker_id/:branch_id", auth, async (req, res) => {
+  const { job_worker_id, branch_id: paramBranchId } = req.params;
+  const branchId = paramBranchId || req.user.branch_id;
+  const { received_pcs } = req.body; // only received pcs
+
+  if (!received_pcs || isNaN(received_pcs) || received_pcs <= 0) {
+    return res.status(400).json({ success: false, error: "Invalid received pcs value" });
+  }
+
+  try {
+    const [entries] = await db.query(
+      "SELECT total_pcs, total_recv_pcs, receive_pcs_history FROM job_worker_entries WHERE branch_id = ? AND job_worker_id = ?",
+      [branchId, job_worker_id]
+    );
+
+    if (entries.length === 0) {
+      return res.status(404).json({ success: false, error: "Job worker entry not found" });
+    }
+
+    const entry = entries[0];
+    const totalRecv = parseInt(entry.total_recv_pcs || 0);
+    const totalPcs = parseInt(entry.total_pcs);
+
+    if (totalRecv >= totalPcs) {
+      return res.status(400).json({ success: false, error: "All pieces already received. Cannot update further." });
+    }
+
+    const newTotalRecv = totalRecv + parseInt(received_pcs);
+    if (newTotalRecv > totalPcs) {
+      return res.status(400).json({ success: false, error: "Received pcs exceed total pcs." });
+    }
+
+    // Update receive_pcs_history
+    let history = entry.receive_pcs_history ? JSON.parse(entry.receive_pcs_history) : [];
+    history.push({ received_pcs: parseInt(received_pcs), received_at: new Date().toISOString() });
+
+    // Update entry
+    await db.query(
+      "UPDATE job_worker_entries SET total_recv_pcs = ?, receive_pcs_history = ? WHERE branch_id = ? AND job_worker_id = ?",
+      [newTotalRecv, JSON.stringify(history), branchId, job_worker_id]
+    );
+
+    res.json({
+      success: true,
+      message: "Job worker entry updated successfully",
+      total_recv_pcs: newTotalRecv
+    });
+
+  } catch (err) {
+    console.error("Error updating job worker entry:", err);
+    res.status(500).json({ success: false, error: "Database error", details: err.message });
+  }
+});
+
+// ================== Pay Job Worker API ==================
+router.post("/payment/:job_worker_id", auth, async (req, res) => {
+  const { job_worker_id } = req.params;
+  const { tds, totalAmount, paymentMode, branchId } = req.body;
+
+  if (!totalAmount || isNaN(totalAmount) || totalAmount <= 0) {
+    return res.status(400).json({ success: false, error: "Invalid payment amount" });
+  }
+
+  try {
+    // 1️⃣ Fetch the job worker entry
+    const [entries] = await db.query(
+      "SELECT * FROM job_worker_entries WHERE branch_id = ? AND job_worker_id = ?",
+      [branchId, job_worker_id]
+    );
+
+    if (entries.length === 0) {
+      return res.status(404).json({ success: false, error: "Job worker entry not found" });
+    }
+
+    const entry = entries[0];
+
+    // 2️⃣ Update entry's payment_type to Paid
+    await db.query(
+      "UPDATE job_worker_entries SET payment_type = 'Paid' WHERE job_worker_id = ?",
+      [ job_worker_id]
+    );
+
+    // 3️⃣ Insert the paid entry into job_worker_payment table
+    await db.query(
+      `INSERT INTO job_worker_payment 
+      (worker_name, job_worker_id, aadhar_number, pan_number, mobile_number, total_pcs, branch_id, product_name, gross_amount, payment_type, total_recv_pcs, tds_value, after_tds_apply) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entry.worker_name,
+        entry.job_worker_id,
+        entry.aadhar_number,
+        entry.pan_number,
+        entry.mobile_number,
+        entry.total_pcs,
+        branchId,
+        entry.product_name,
+        entry.gross_amount,
+        paymentMode,
+        entry.total_recv_pcs,
+        tds || 0,
+        totalAmount
+      ]
+    );
+
+    // 4️⃣ Return the paid entry
+    res.json({ success: true, message: "Payment recorded successfully", paidEntry: { ...entry, payment_type: "Paid", tds_value: tds || 0, after_tds_apply: totalAmount } });
+  } catch (err) {
+    console.error("Error recording payment:", err);
+    res.status(500).json({ success: false, error: "Database error", details: err.message });
+  }
+});
+
+// ================== Get All Job Worker Payments ==================
+router.get("/payments/all/:branch_id", auth, async (req, res) => {
+  const branchId = req.params.branch_id || req.user.branch_id;
+
+  try {
+    const [payments] = await db.query(
+      "SELECT * FROM job_worker_payment WHERE branch_id = ? ORDER BY created_at DESC",
+      [branchId]
+    );
+
+    res.json({ success: true, data: payments });
+  } catch (err) {
+    console.error("Error fetching payments:", err);
+    res.status(500).json({ success: false, error: "Database error", details: err.message });
+  }
+});
+
+
+// ================== Get Job Worker Payment By ID ==================
+router.get("/payments/:job_worker_id/:branch_id", auth, async (req, res) => {
+  const { job_worker_id } = req.params;
+  const branchId = req.params.branch_id || req.user.branch_id;
+
+  try {
+    const [payments] = await db.query(
+      "SELECT * FROM job_worker_payment WHERE branch_id = ? AND job_worker_id = ?",
+      [branchId, job_worker_id]
+    );
+
+    if (payments.length === 0) {
+      return res.status(404).json({ success: false, error: "Payment record not found" });
+    }
+
+    res.json({ success: true, data: payments[0] });
+  } catch (err) {
+    console.error("Error fetching payment:", err);
+    res.status(500).json({ success: false, error: "Database error", details: err.message });
+  }
+});
+
+// ================== Delete Job Worker Entry by ID ==================
+router.delete("/delete/:job_worker_id", auth, async (req, res) => {
+  const branchId = req.user.branch_id;
+  const { job_worker_id } = req.params;
+
+  try {
+    const [result] = await db.query(
+      "DELETE FROM job_worker_entries WHERE branch_id = ? AND job_worker_id = ?",
+      [branchId, job_worker_id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, error: "Job worker entry not found" });
+    }
+
+    res.json({ success: true, message: "Job worker entry deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting job worker entry:", err);
+    res.status(500).json({ success: false, error: "Database error" });
+  }
+});
 
 module.exports = router;
